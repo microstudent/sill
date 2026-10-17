@@ -1,0 +1,39 @@
+# Swift Package Manager and local build output
+/.build/
+/build/
+/DerivedData/
+/.swiftpm/
+
+# Xcode user settings (shared project settings remain tracked)
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+
+# macOS metadata
+.DS_Store
+._*
+.AppleDouble
+
+# Logs and coverage
+/logs/
+*.log
+*.xcresult/
+*.profraw
+*.profdata
+
+# Local environment and signing material
+.env
+.env.*
+!.env.example
+*.p12
+*.pfx
+*.keychain
+*.keychain-db
+*.mobileprovision
+*.provisionprofile
+
+# Editor temporary files
+*.swp
+*.swo
+*~
