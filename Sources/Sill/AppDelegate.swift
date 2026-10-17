@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         let p = Preferences.shared
         settings.restoreWindows = { [weak self] in self?.avoidance.restore() }
+        search.showSettings = { [weak self] in self?.settings.show() }
         settings.showSearch = { [weak self] in self?.search.show() }
         hotkeys.onSearch = { [weak self] in self?.search.show() }
         hotkeys.onNumber = { [weak self] number in self?.switchNumber(number) }
@@ -84,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeys.configure()
         if let error = hotkeys.error { service.actionError = error }
         updateMenus()
+        search.refresh()
         updateAvoidance()
     }
     private func updateAvoidance() {

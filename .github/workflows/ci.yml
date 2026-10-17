@@ -30,3 +30,12 @@ jobs:
         env:
           CODE_SIGN_IDENTITY: "-"
         run: ./scripts/build-app.sh
+      - name: Archive app bundle
+        run: ditto -c -k --sequesterRsrc --keepParent build/Sill.app build/Sill-macos-${{ runner.arch }}.zip
+      - name: Upload test build
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          path: build/Sill-macos-${{ runner.arch }}.zip
+          archive: false
+          if-no-files-found: error
+          retention-days: 14

@@ -1,5 +1,4 @@
 import AppKit
-import Carbon
 import SillCore
 
 final class SearchPanel: NSPanel {
@@ -13,6 +12,8 @@ final class SearchController: NSObject, NSSearchFieldDelegate, NSTableViewDataSo
     private let field = NSSearchField()
     private let table = NSTableView()
     private let footer = NSTextField(labelWithString: "")
+    private let emptyState = SearchEmptyState()
+    var showSettings: (() -> Void)?
     private var results: [WindowItem] = []
     private var searchIndex: [UInt64: (title: String, app: String, document: WindowSearch.Document)] = [:]
     private var eventMonitor: Any?
@@ -38,6 +39,9 @@ final class SearchController: NSObject, NSSearchFieldDelegate, NSTableViewDataSo
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         table.dataSource = self; table.delegate = self; table.target = self; table.action = #selector(chosen)
         scroll.documentView = table; effect.addSubview(scroll)
+        emptyState.frame = scroll.frame
+        emptyState.openSettings = { [weak self] in self?.dismiss(); self?.showSettings?() }
+        effect.addSubview(emptyState)
         footer.frame = CGRect(x: 22, y: 13, width: 575, height: 20)
         footer.font = .systemFont(ofSize: 11); footer.textColor = .secondaryLabelColor; effect.addSubview(footer)
     }
@@ -63,7 +67,13 @@ final class SearchController: NSObject, NSSearchFieldDelegate, NSTableViewDataSo
     }
     func windowDidResignKey(_ notification: Notification) { dismiss() }
     func controlTextDidChange(_ obj: Notification) { updateResults(preserveSelection: false) }
-    func refresh() { if panel.isVisible { updateResults() } }
+    func refresh() {
+        guard panel.isVisible else { return }
+        panel.appearance = Preferences.shared.appearance
+        panel.title = L("搜索窗口", "Search Windows")
+        field.placeholderString = L("应用、窗口标题、拼音或首字母", "App, window title, pinyin or initials")
+        updateResults()
+    }
     private func updateResults(preserveSelection: Bool = true) {
         let selected = preserveSelection && results.indices.contains(table.selectedRow) ? results[table.selectedRow].id : nil
         let candidates = WindowList.filtered(service.windows)
@@ -78,28 +88,41 @@ final class SearchController: NSObject, NSSearchFieldDelegate, NSTableViewDataSo
             return (item, score)
         }.sorted { a, b in a.1 != b.1 ? a.1 > b.1 : a.0.lastUsed != b.0.lastUsed ? a.0.lastUsed > b.0.lastUsed : a.0.id < b.0.id }.map(\.0)
         table.reloadData()
-        if !results.isEmpty { table.selectRowIndexes(IndexSet(integer: results.firstIndex { $0.id == selected } ?? 0), byExtendingSelection: false) }
-        if results.isEmpty { footer.stringValue = service.trusted ? L("没有匹配的窗口", "No matching windows") : L("请先在设置中授予辅助功能权限", "Enable Accessibility in Settings first") }
+        if !results.isEmpty {
+            let row = results.firstIndex { $0.id == selected } ?? 0
+            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            if !preserveSelection { table.scrollRowToVisible(row) }
+        } else { table.deselectAll(nil) }
+        emptyState.isHidden = !results.isEmpty
+        emptyState.update(trusted: service.trusted, hasQuery: !field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        if results.isEmpty { footer.stringValue = L("esc 关闭搜索", "esc Close Search") }
         else { footer.stringValue = L("↑ ↓ 选择   ↵ 切换   esc 取消   ⌘W 关闭   ⌘M 最小化", "↑ ↓ Select   ↵ Switch   esc Cancel   ⌘W Close   ⌘M Minimize") }
     }
     private func handle(_ event: NSEvent) -> Bool {
-        switch event.keyCode {
-        case 53: dismiss(); return true
-        case 36: chosen(); return true
-        case 125, 126, 48:
-            guard !results.isEmpty else { return true }
-            let delta = event.keyCode == 126 || (event.keyCode == 48 && event.modifierFlags.contains(.shift)) ? -1 : 1
+        let editor = field.currentEditor() as? NSTextView
+        let flags: [(NSEvent.ModifierFlags, SearchKeyboard.Modifier)] = [(.command, .command), (.control, .control), (.option, .option), (.shift, .shift)]
+        let modifiers = Set(flags.compactMap { event.modifierFlags.contains($0.0) ? $0.1 : nil })
+        guard let command = SearchKeyboard.command(keyCode: event.keyCode, characters: event.charactersIgnoringModifiers,
+                                                   modifiers: modifiers, hasMarkedText: editor?.hasMarkedText() ?? false) else { return false }
+        switch command {
+        case .dismiss: dismiss()
+        case .activate:
+            guard !(panel.firstResponder is NSButton) else { return false }
+            chosen()
+        case .move(let delta):
+            // When there are no results, Tab must still reach the Settings button.
+            guard !results.isEmpty else { return event.keyCode != 48 }
             let row = (max(0, table.selectedRow) + delta + results.count) % results.count
-            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false); table.scrollRowToVisible(row)
-            return true
-        default:
-            guard event.modifierFlags.contains(.command), results.indices.contains(table.selectedRow) else { return false }
+            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            table.scrollRowToVisible(row)
+        case .close, .minimize, .hide:
+            guard results.indices.contains(table.selectedRow) else { return false }
             let item = results[table.selectedRow]
-            if event.charactersIgnoringModifiers == "w" { service.close(item); return true }
-            if event.charactersIgnoringModifiers == "m" { service.minimize(item); return true }
-            if event.charactersIgnoringModifiers == "h" { NSRunningApplication(processIdentifier: item.pid)?.hide(); return true }
-            return false
+            if command == .close { service.close(item) }
+            else if command == .minimize { service.minimize(item) }
+            else { NSRunningApplication(processIdentifier: item.pid)?.hide() }
         }
+        return true
     }
     @objc private func chosen() {
         guard results.indices.contains(table.selectedRow) else { return }
@@ -117,42 +140,8 @@ final class SearchController: NSObject, NSSearchFieldDelegate, NSTableViewDataSo
         let app = NSTextField(labelWithString: item.appName + (item.minimized ? L(" · 已最小化", " · Minimized") : ""))
         app.frame = CGRect(x: 50, y: 2, width: 510, height: 17); app.font = .systemFont(ofSize: 11); app.textColor = .secondaryLabelColor
         view.addSubview(app)
-        view.setAccessibilityLabel(item.appName + " — " + item.label)
+        view.toolTip = item.appName + " — " + item.label
+        view.setAccessibilityLabel(view.toolTip)
         return view
     }
-}
-
-/// System-registered shortcuts do not intercept or log arbitrary keyboard input.
-final class HotKeyManager {
-    private var refs: [EventHotKeyRef] = []
-    private var handler: EventHandlerRef?
-    var onSearch: (() -> Void)?
-    var onNumber: ((Int) -> Void)?
-    var error: String?
-    init() {
-        var event = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallEventHandler(GetApplicationEventTarget(), { _, event, data in
-            guard let event, let data else { return OSStatus(eventNotHandledErr) }
-            var id = EventHotKeyID()
-            GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size, nil, &id)
-            let manager = Unmanaged<HotKeyManager>.fromOpaque(data).takeUnretainedValue()
-            if id.id == 1 { manager.onSearch?() } else { manager.onNumber?(Int(id.id) - 10) }
-            return noErr
-        }, 1, &event, Unmanaged.passUnretained(self).toOpaque(), &handler)
-    }
-    func configure() {
-        refs.forEach { UnregisterEventHotKey($0) }; refs.removeAll(); error = nil
-        if Preferences.shared.searchShortcut { register(code: UInt32(kVK_Space), modifiers: UInt32(controlKey | optionKey), id: 1) }
-        if Preferences.shared.numberShortcut {
-            let keys = [kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5, kVK_ANSI_6, kVK_ANSI_7, kVK_ANSI_8, kVK_ANSI_9]
-            for (i, key) in keys.enumerated() { register(code: UInt32(key), modifiers: UInt32(controlKey | optionKey), id: UInt32(i + 11)) }
-        }
-    }
-    private func register(code: UInt32, modifiers: UInt32, id: UInt32) {
-        var ref: EventHotKeyRef?
-        let status = RegisterEventHotKey(code, modifiers, EventHotKeyID(signature: 0x53494C4C, id: id), GetApplicationEventTarget(), 0, &ref)
-        if status == noErr, let ref { refs.append(ref) }
-        else { error = L("快捷键被其他应用占用，请从菜单栏打开搜索。", "A shortcut is in use by another app. Open Search from the menu bar.") }
-    }
-    deinit { refs.forEach { UnregisterEventHotKey($0) }; if let handler { RemoveEventHandler(handler) } }
 }

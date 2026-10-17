@@ -46,16 +46,19 @@ The development machine runs macOS 27.0.1 on Apple Silicon. The deployment targe
 - [x] Minimizing and restoring a Finder window, with corresponding regrouping.
 - [x] Searching for “应用” and switching to Finder with Return.
 - [x] Physical Control–Option–Space shortcut confirmed by the user.
-- [x] 19 unit tests covering geometry, search, pinyin, initials, mixed tokens, ü/v input, conservative title formatting, width limits, preview placement, and stable application clustering.
+- [x] 22 unit tests covering geometry, search, pinyin, initials, mixed tokens, ü/v input, conservative title formatting, width limits, preview placement, stable application clustering, and input-method-safe keyboard routing.
 - [x] Installed app: expanded and collapsed lists have identical height and aligned icon rows with the same windows.
 - [x] Installed app: two Edge windows are adjacent within the current-desktop group; visibility sections remain separate.
 - [x] Installed app: 420 pt adaptive expansion and a wrapping full-title preview for a truncated editor title (also confirmed by a user screenshot).
 - [x] Settings open / close / reopen changes the app's activation policy to regular / accessory / regular, while the sidebar remains running.
 - [x] Minimal About page checked in the installed app.
+- [x] Search no-result guidance and resetting scroll position when changing Settings pages.
+- [x] Install script rejects replacement while Sill is running; ZIP extraction retains executable permission and a valid signature.
+- [ ] Live Chinese input-method candidate selection and permission revocation during an active scan (keyboard policy has regression tests).
 - [ ] Accurate switching among multiple windows of the same app.
 - [ ] Window-close and application-exit cleanup.
 - [ ] Full coverage of resting modes, long-list scrolling, and nonactivating hover.
-- [ ] Real-window pinyin search in the renamed, installed Sill app.
+- [x] Installed Sill: `yycx` finds the Finder “应用程序” window; Return switches to it.
 - [ ] Full arrow-key, Tab, and Escape navigation paths.
 - [ ] Multi-monitor hardware, unplugging displays, resolutions, and Dock placement.
 - [ ] Full screen, other Spaces, and Stage Manager.
@@ -64,6 +67,6 @@ The development machine runs macOS 27.0.1 on Apple Silicon. The deployment targe
 - [x] Native Liquid Glass and Classic Frosted rendering with real windows on macOS 27.0.1; material changes keep the window list visible.
 - [ ] Clear Glass visual checks and older-system material fallback.
 
-The window-switching and Chinese-search checks above were performed on the development app before it was renamed to Sill. Accessibility authorization and real-window listing were subsequently verified in the installed Sill app, including after the Liquid Glass update. Real-window pinyin search remains unchecked; the algorithm has unit-test coverage.
+The window-switching and Chinese-search checks above were performed on the development app before it was renamed to Sill. Accessibility authorization and real-window listing were subsequently verified in the installed Sill app, including after the Liquid Glass update. Real-window pinyin-initial search and Return activation were subsequently verified in the installed Sill app.
 
 Local check output lives in the ignored `logs/` directory. Unchecked items are not represented as verified behavior. CI builds and tests do not replace interactive validation.

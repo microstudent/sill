@@ -72,7 +72,7 @@ struct SettingsView: View {
                     case "about": about
                     default: welcome
                     }
-                }.formStyle(.grouped)
+                }.formStyle(.grouped).id(page)
             }.frame(minWidth: 540, maxWidth: .infinity, maxHeight: .infinity)
         }.frame(minWidth: 780, minHeight: 580)
     }
@@ -223,7 +223,7 @@ struct SettingsView: View {
             }
             Section(L("数字切换", "Number Switching")) {
                 Toggle(L("Control + Option + 1–9 切换窗口", "Control + Option + 1–9 Switches Windows"), isOn: $preferences.numberShortcut)
-                Toggle(L("在侧边栏显示数字", "Show Numbers on Sidebar"), isOn: $preferences.showNumbers)
+                Toggle(L("显示前 9 个窗口的编号", "Show Numbers for the First 9 Windows"), isOn: $preferences.showNumbers)
                 Text(L("数字对应鼠标所在显示器侧边栏的前九个窗口。", "Numbers correspond to the first nine windows in the sidebar on the pointer’s display.")).font(.caption).foregroundStyle(.secondary)
             }
             Section(L("面板操作", "Panel Actions")) {

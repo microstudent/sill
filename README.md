@@ -46,6 +46,12 @@ Quit an existing Sill instance before replacing it. The install script replaces 
 
 These scripts produce a local development build, not a notarized release. They use an available Apple Development signing identity, falling back to ad-hoc signing. See [development and signing](docs/DEVELOPMENT.md) for explicit signing options.
 
+## Download a CI test build
+
+Open [Actions](https://github.com/microstudent/sill/actions), choose a successful CI run, and download `Sill-macos-<architecture>.zip` from Artifacts. Builds are retained for 14 days; downloading requires a GitHub sign-in and access to the repository.
+
+These builds are ad-hoc signed and have not been notarized by Apple, so macOS may block opening them directly. They are development builds, not public releases. The filename identifies the runner architecture; the app is not a universal binary.
+
 ## First launch
 
 1. Open Sill and choose **Open Accessibility Settings**.

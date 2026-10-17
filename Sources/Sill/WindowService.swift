@@ -47,6 +47,8 @@ final class WindowService: ObservableObject {
     private var pending: DispatchWorkItem?
     private var scanning = false
     private var rescanRequested = false
+    private var stopped = false
+    private var authorizationGeneration: UInt64 = 0
     // Worker-queue state only:
     private var previous: [WindowItem] = []
     private var nextID: UInt64 = 1
@@ -55,6 +57,7 @@ final class WindowService: ObservableObject {
     private var icons: [pid_t: NSImage] = [:]
 
     func start() {
+        stopped = false
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification,
                      NSWorkspace.didActivateApplicationNotification, NSWorkspace.didHideApplicationNotification,
                      NSWorkspace.didUnhideApplicationNotification, NSWorkspace.activeSpaceDidChangeNotification,
@@ -66,6 +69,8 @@ final class WindowService: ObservableObject {
         refresh()
     }
     func stop() {
+        stopped = true
+        authorizationGeneration &+= 1
         timer?.invalidate(); pending?.cancel()
         workspaceTokens.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
         queue.sync {
@@ -80,19 +85,30 @@ final class WindowService: ObservableObject {
         return image
     }
     func scheduleRefresh() {
+        guard !stopped else { return }
         pending?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.refresh() }
         pending = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: work)
     }
-    func refresh() {
-        trusted = AXIsProcessTrusted()
-        guard trusted else {
-            if !windows.isEmpty { windows = []; onUpdate?() }
-            return
+    /// Recheck at both scan boundaries: a queued AX result must not repopulate
+    /// the sidebar after access has been revoked or the service has stopped.
+    private func updateAuthorization() -> Bool {
+        let authorized = AXIsProcessTrusted()
+        let changed = authorized != trusted
+        if changed { authorizationGeneration &+= 1; trusted = authorized }
+        if !authorized {
+            let hadWindows = !windows.isEmpty
+            windows = []
+            if changed || hadWindows { onUpdate?() }
         }
+        return authorized
+    }
+    func refresh() {
+        guard !stopped, updateAuthorization() else { return }
         guard !scanning else { rescanRequested = true; return }
         scanning = true
+        let generation = authorizationGeneration
         let apps = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular && $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
         let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
@@ -103,6 +119,15 @@ final class WindowService: ObservableObject {
             self.synchronizeWindowObservers(list)
             DispatchQueue.main.async {
                 self.scanning = false
+                guard !self.stopped, self.updateAuthorization() else {
+                    self.rescanRequested = false
+                    return
+                }
+                guard generation == self.authorizationGeneration else {
+                    self.rescanRequested = false
+                    self.scheduleRefresh()
+                    return
+                }
                 self.windows = list
                 self.onUpdate?()
                 if self.rescanRequested { self.rescanRequested = false; self.scheduleRefresh() }

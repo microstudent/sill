@@ -46,6 +46,12 @@ open ~/Applications/Sill.app
 
 上述脚本生成本地开发版本，不是经过公证的发行版本。构建优先使用可用的 Apple Development 签名身份，没有证书时使用临时签名。手动指定签名等选项见[开发文档](docs/DEVELOPMENT.md)（英文）。
 
+## 下载 CI 测试包
+
+打开仓库的 [Actions](https://github.com/microstudent/sill/actions)，选择成功的 CI 运行，在 Artifacts 中下载 `Sill-macos-<架构>.zip`。测试包保留 14 天，需要登录 GitHub 并拥有仓库访问权限。
+
+测试包使用 ad-hoc 签名，尚未经过 Apple 公证，macOS 可能阻止直接打开；它不属于正式发行版。文件名中的架构对应构建机器，并非通用二进制。
+
 ## 首次使用
 
 1. 打开 Sill，点击**打开辅助功能设置**。

@@ -13,19 +13,19 @@ Check the active toolchain with `swift --version` and `xcode-select -p`. The pac
 ```text
 Sources/
   Sill/                 AppKit app, SwiftUI settings, Accessibility integration
-  SillCore/             Window geometry and search logic
-Tests/SillCoreTests/    XCTest coverage for geometry and search
+  SillCore/             Geometry, search, keyboard policy, title formatting and ordering
+Tests/SillCoreTests/    XCTest coverage for portable window and search behavior
 Resources/             App bundle metadata
 scripts/               Build, install, and icon generation
 docs/                  Compatibility notes and README artwork
 .github/               CI and contribution templates
 ```
 
-`WindowService` serializes Accessibility queries and actions on a background queue. It combines debounced AX events with a three-second fallback refresh and keeps AX element identity for windows. UI work runs on the main thread.
+`WindowService` serializes Accessibility queries and actions on a background queue. It combines debounced AX events with a three-second fallback refresh and keeps AX element identity for windows. UI work runs on the main thread. Authorization is rechecked before publishing each scan; an authorization generation prevents results from an earlier access state from repopulating the list.
 
-`WindowList` filters and groups windows and renders nonactivating sidebar panels. `SidebarStates` manages compact group headers and empty states. `WindowAvoidance` tracks automatic adjustments and avoids restoring over later user changes.
+`WindowList` only filters and groups window models. `SidebarController` owns the nonactivating panel and layout, `SidebarSurface` owns materials and scroll gestures, and `WindowRow` owns row rendering and title previews. `SidebarStates` provides compact group headers and empty states. Shared action controls live in `UIActions`. `WindowAvoidance` tracks automatic adjustments and avoids restoring over later user changes.
 
-`SearchController` handles search and registered system shortcuts. `SillCore.WindowSearch` caches offline transliteration by app name and title; literal matches rank ahead of pinyin and initials. `SettingsController` and `Preferences` provide persistence and immediate language switching.
+`SearchController` owns the search panel and results; `SearchEmptyState` provides no-result and permission guidance. `HotKeyManager` registers system shortcuts. `SillCore.SearchKeyboard` leaves marked text and text-editing modifier combinations to the input method, while routing explicit search commands. `SillCore.WindowSearch` caches offline transliteration by app name and title; literal matches rank ahead of pinyin and initials. `SettingsController` and `Preferences` provide persistence and immediate language switching.
 
 `SidebarSurface` embeds the toolbar and window list in `NSGlassEffectView.contentView` on macOS 26+. It swaps between regular glass, clear glass, and `NSVisualEffectView` without recreating the panel. Older systems use the frosted surface. Glass rendering and accessibility adjustments are handled by AppKit.
 
@@ -53,7 +53,7 @@ To build and install into `~/Applications/Sill.app`:
 ./scripts/install-app.sh
 ```
 
-Quit Sill before replacing an installed build. Build output, logs, and local IDE state are ignored by Git. Keep source assets, tests, shared configuration, and any future `Package.resolved` lockfile under version control.
+The installer refuses to proceed while Sill is running. Quit all Sill instances before replacing an installed build. Build output, logs, and local IDE state are ignored by Git. Keep source assets, tests, shared configuration, and any future `Package.resolved` lockfile under version control.
 
 ## Signing and Accessibility
 
@@ -73,7 +73,7 @@ Keep the app path and signing identity stable for interactive development. Rebui
 
 ## Validation scope
 
-GitHub Actions runs unit tests and packages an ad-hoc-signed app on a macOS runner. It does not launch the app, grant permissions, or exercise interactive UI flows.
+GitHub Actions runs unit tests and packages an ad-hoc-signed app on a macOS runner. It archives the bundle with `ditto` before uploading a downloadable `Sill-macos-<architecture>.zip` artifact, retained for 14 days. Pre-archiving preserves bundle metadata and executable permissions. This is a development build, not a notarized public release. CI does not launch the app, grant permissions, or exercise interactive UI flows.
 
 Use the [manual checklist](parity.md) for changes involving real windows, Spaces, multiple displays, or permissions. Record only checks that were actually performed, including the OS and relevant setup.
 
