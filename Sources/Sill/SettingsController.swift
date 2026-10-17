@@ -141,12 +141,19 @@ struct SettingsView: View {
                 Picker(L("鼠标离开时", "When Cursor Leaves"), selection: $preferences.resting) {
                     ForEach(SillCore.RestingMode.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
-                HStack { Text(L("展开宽度", "Expanded Width")); Slider(value: $preferences.width, in: 180...600, step: 10); Text("\(Int(preferences.width))").monospacedDigit().frame(width: 34) }
+                Toggle(L("根据标题自动调整展开宽度", "Fit Expanded Width to Titles"), isOn: $preferences.adaptiveWidth)
+                if preferences.adaptiveWidth {
+                    Text(L("展开时自动选择 300–420 点宽度，本次展开期间保持稳定。悬停在截断的标题上可查看完整内容。", "Automatically uses 300–420 pt and keeps the width steady until collapse. Hover over a truncated title to see it in full.")).font(.caption).foregroundStyle(.secondary)
+                } else {
+                    HStack { Text(L("展开宽度", "Expanded Width")); Slider(value: $preferences.width, in: 180...600, step: 10); Text("\(Int(preferences.width))").monospacedDigit().frame(width: 34) }
+                }
                 Text(L("鼠标移到侧边栏上自动展开；向屏幕边缘横向滚动可暂时隐藏，再次移到边缘即可展开。", "Hover to expand. Scroll horizontally toward the display edge to hide temporarily; return to the edge to reveal it.")).font(.caption).foregroundStyle(.secondary)
             }
             Section(L("窗口避让", "Window Clearance")) {
                 Toggle(L("自动调整窗口宽度，避免被侧边栏遮挡", "Auto-adjust Window Widths to Avoid Overlap"), isOn: $preferences.autoAvoid)
-                Text(L("仅为收起状态预留空间；不调整全屏或最小化窗口。手动调整过的窗口暂停避让 60 秒。", "Reserves the resting width only. Full-screen and minimized windows are excluded. Manual resizing pauses adjustment for 60 seconds.")).font(.caption).foregroundStyle(.secondary)
+                Text(L("仅为收起状态预留空间；不调整全屏或最小化窗口。", "Reserves the resting width only. Full-screen and minimized windows are excluded.")).font(.caption).foregroundStyle(.secondary)
+                Toggle(L("手动调整窗口后，暂停避让 60 秒", "Pause Clearance for 60 Seconds After Manual Resizing"), isOn: $preferences.pauseAfterManualResize)
+                    .disabled(!preferences.autoAvoid)
                 Button(L("还原本次自动调整的窗口", "Restore Automatically Adjusted Windows"), action: restore)
             }
         }

@@ -39,6 +39,8 @@ open build/Sill.app
 
 The build script creates `build/Sill.app`, including generated icons and bundle metadata. Use this app bundle for manual testing; `swift run` alone does not package the application resources.
 
+The script explicitly passes the deployment target and selected SDK to the linker, then verifies the executable's `LC_BUILD_VERSION`. Some SwiftPM build engines otherwise record the deployment target (14.0) as the SDK version, which can keep AppKit in an older appearance compatibility mode even when `NSGlassEffectView` is used. The minimum runtime remains macOS 14; the linked SDK must match the actual macOS 26+ SDK used to build it. Do not substitute a plain `swift build` executable into a packaged app without this check.
+
 To package a debug build:
 
 ```sh

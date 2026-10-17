@@ -19,6 +19,7 @@ final class Preferences: ObservableObject {
     @Published var language: String { didSet { save(language, "language") } }
     @Published var edge: SidebarEdge { didSet { save(edge.rawValue, "edge") } }
     @Published var resting: RestingMode { didSet { save(resting.rawValue, "resting") } }
+    @Published var adaptiveWidth: Bool { didSet { save(adaptiveWidth, "adaptiveWidth") } }
     @Published var width: Double { didSet { save(width, "width") } }
     @Published var textSize: Double { didSet { save(textSize, "textSize") } }
     @Published var vertical: String { didSet { save(vertical, "vertical") } }
@@ -29,6 +30,7 @@ final class Preferences: ObservableObject {
     @Published var sidebarMaterial: String { didSet { save(sidebarMaterial, "sidebarMaterial") } }
     @Published var showMinimized: Bool { didSet { save(showMinimized, "showMinimized") } }
     @Published var showWindowless: Bool { didSet { save(showWindowless, "showWindowless") } }
+    @Published var pauseAfterManualResize: Bool { didSet { save(pauseAfterManualResize, "pauseAfterManualResize") } }
     @Published var autoAvoid: Bool { didSet { save(autoAvoid, "autoAvoid") } }
     @Published var excluded: String { didSet { save(excluded, "excluded") } }
     @Published var titleFilter: String { didSet { save(titleFilter, "titleFilter") } }
@@ -38,13 +40,14 @@ final class Preferences: ObservableObject {
     var onChange: (() -> Void)?
 
     init() {
-        defaults.register(defaults: ["language":"system", "edge":"left", "resting":"icons", "width":210.0,
+        defaults.register(defaults: ["language":"system", "edge":"left", "resting":"icons", "width":300.0, "adaptiveWidth":true,
             "textSize":14.0, "vertical":"center", "displays":"all", "scope":"displayAll", "grouping":"visibility",
-            "theme":"system", "sidebarMaterial":"glass", "showMinimized":true, "showWindowless":false, "autoAvoid":false,
+            "theme":"system", "sidebarMaterial":"glass", "showMinimized":true, "showWindowless":false, "autoAvoid":false, "pauseAfterManualResize":false,
             "excluded":"", "titleFilter":"", "searchShortcut":true, "numberShortcut":false, "showNumbers":false])
         language = defaults.string(forKey: "language")!
         edge = SidebarEdge(rawValue: defaults.string(forKey: "edge")!) ?? .left
         resting = RestingMode(rawValue: defaults.string(forKey: "resting")!) ?? .icons
+        adaptiveWidth = defaults.bool(forKey: "adaptiveWidth")
         width = min(600, max(180, defaults.double(forKey: "width")))
         textSize = min(20, max(11, defaults.double(forKey: "textSize")))
         vertical = defaults.string(forKey: "vertical")!
@@ -56,6 +59,7 @@ final class Preferences: ObservableObject {
         showMinimized = defaults.bool(forKey: "showMinimized")
         showWindowless = defaults.bool(forKey: "showWindowless")
         autoAvoid = defaults.bool(forKey: "autoAvoid")
+        pauseAfterManualResize = defaults.bool(forKey: "pauseAfterManualResize")
         excluded = defaults.string(forKey: "excluded")!
         titleFilter = defaults.string(forKey: "titleFilter")!
         searchShortcut = defaults.bool(forKey: "searchShortcut")

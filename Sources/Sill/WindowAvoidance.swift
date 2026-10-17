@@ -15,7 +15,7 @@ final class WindowAvoidance {
     private var generation: UInt64 = 0
     private var pausedUntil: TimeInterval = 0
     init(service: WindowService) { self.service = service }
-    func update(screens: [NSScreen]) {
+    func update(screens: [NSScreen], restingWidth: (NSScreen) -> CGFloat) {
         let p = Preferences.shared
         let now = Date.timeIntervalSinceReferenceDate
         guard p.autoAvoid, p.resting != .hidden, now > pausedUntil else { return }
@@ -25,15 +25,17 @@ final class WindowAvoidance {
         for item in service.windows where item.onScreen && !item.fullscreen && !item.minimized && !item.hidden && item.element != nil {
             guard !inFlight.contains(item.id), retryAfter[item.id] == nil else { continue }
             if var adjustment = adjustments[item.id], !approximatelyEqual(item.frame, adjustment.applied) {
-                if adjustment.cooldownUntil == 0 {
-                    adjustment.cooldownUntil = now + 60
-                    adjustments[item.id] = adjustment
+                if p.pauseAfterManualResize {
+                    if adjustment.cooldownUntil == 0 {
+                        adjustment.cooldownUntil = now + 60
+                        adjustments[item.id] = adjustment
+                    }
+                    if now < adjustment.cooldownUntil { continue }
                 }
-                if now < adjustment.cooldownUntil { continue }
                 adjustments.removeValue(forKey: item.id)
             }
             guard let screen = screens.first(where: { $0.frame.contains(CGPoint(x: item.frame.midX, y: item.frame.midY)) }),
-                  let proposed = SidebarGeometry.avoidingStrip(window: item.frame, visibleFrame: screen.visibleFrame, edge: p.edge, width: p.restingWidth) else { continue }
+                  let proposed = SidebarGeometry.avoidingStrip(window: item.frame, visibleFrame: screen.visibleFrame, edge: p.edge, width: restingWidth(screen)) else { continue }
             let original = adjustments[item.id]?.original ?? item.frame
             let revision = generation
             inFlight.insert(item.id)

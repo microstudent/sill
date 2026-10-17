@@ -12,9 +12,10 @@ Built with Swift, AppKit, and SwiftUI. No third-party dependencies.
 
 - **Windows within reach.** App icons, window titles, active-window highlighting, and actions to switch, minimize, or close windows.
 - **A sidebar that fits your desktop.** Left or right edge, four collapsed/expanded modes, adjustable size, and light, dark, or system appearance.
+- **Readable titles.** Automatic 300–420 pt expansion, a steady list height, and wrapping full-title previews on hover. Manual width remains available in Sidebar settings.
 - **Native Liquid Glass.** Choose Liquid Glass, Clear Glass, or Classic Frosted in Settings. Glass effects require macOS 26+; earlier systems use frosted material.
 - **Fast window search.** Search app names and window titles in English, Chinese, full pinyin, or pinyin initials. Mix multiple keywords in one query.
-- **Flexible organization.** Group by app or visibility, choose which displays and windows to show, and exclude apps or matching window titles.
+- **Flexible organization.** Keep the same app’s windows together within each group, group by app or visibility, choose which displays and windows to show, and exclude apps or matching window titles.
 - **Optional window clearance.** Reserve space for the sidebar and restore windows adjusted during the current session.
 - **Native preferences.** English and Simplified Chinese, launch at login, and a menu bar entry. Opening Settings shows a Dock icon; closing Settings keeps the sidebar running.
 

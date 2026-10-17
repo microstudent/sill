@@ -26,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.sidebars.forEach { $0.rebuild() }
             self.search.refresh()
-            self.avoidance.update(screens: self.sidebarScreens)
+            self.updateAvoidance()
         }
         screenToken = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             self?.avoidance.restore(pauseFor: 1.5); self?.rebuildSidebars(); self?.service.scheduleRefresh()
@@ -73,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     private func preferencesChanged() {
         let p = Preferences.shared
-        let config = "\(p.edge):\(p.resting):\(p.displays):\(p.autoAvoid):\(p.width)"
+        let config = "\(p.edge):\(p.resting):\(p.displays):\(p.autoAvoid):\(p.width):\(p.adaptiveWidth)"
         if !lastAvoidanceConfig.isEmpty && lastAvoidanceConfig != config { avoidance.restore(pauseFor: 1.5) }
         lastAvoidanceConfig = config
         NSApp.appearance = p.appearance
@@ -84,7 +84,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeys.configure()
         if let error = hotkeys.error { service.actionError = error }
         updateMenus()
-        avoidance.update(screens: sidebarScreens)
+        updateAvoidance()
+    }
+    private func updateAvoidance() {
+        avoidance.update(screens: sidebarScreens) { screen in
+            self.sidebars.first { $0.screen == screen }?.reservedWidth ?? Preferences.shared.restingWidth
+        }
     }
     private func switchNumber(_ number: Int) {
         let screen = sidebarScreens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? sidebarScreens.first

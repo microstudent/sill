@@ -31,6 +31,11 @@ enum WindowList {
         }.sorted { $0.id < $1.id }
     }
     static func groups(_ items: [WindowItem]) -> [WindowGroup] {
+        // Input is in stable discovery order. Cluster before partitioning so sidebar
+        // rendering and number shortcuts share the same app/window order.
+        let items = WindowOrdering.adjacentByApplication(items) { item in
+            item.bundleID.isEmpty ? "pid:\(item.pid)" : "bundle:\(item.bundleID)"
+        }
         switch Preferences.shared.grouping {
         case "none": return [WindowGroup(title: "", items: items)]
         case "app":
@@ -78,20 +83,22 @@ final class WindowRow: NSView {
     let number = NSTextField(labelWithString: "")
     var activate: (() -> Void)?
     private var hovered = false
+    private var previewWork: DispatchWorkItem?
+    private let preview = WindowTitlePreview()
     init(item: WindowItem, service: WindowService, index: Int) {
         self.item = item; self.service = service
         super.init(frame: .zero)
         wantsLayer = true; layer?.cornerRadius = 6
         icon.image = service.icon(for: item); icon.imageScaling = .scaleProportionallyUpOrDown
-        label.stringValue = item.label + (item.minimized ? "  −" : "")
+        label.stringValue = WindowTitle.display(item.label, app: item.appName, bundleID: item.bundleID) + (item.minimized ? "  −" : "")
         label.font = .systemFont(ofSize: Preferences.shared.textSize)
-        label.lineBreakMode = .byTruncatingTail
+        label.lineBreakMode = WindowTitle.isFilename(item.label) ? .byTruncatingMiddle : .byTruncatingTail
         label.textColor = item.minimized || item.hidden ? .secondaryLabelColor : .labelColor
         number.stringValue = "\(index)"; number.font = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
         number.textColor = .secondaryLabelColor
         addSubview(icon); addSubview(label); addSubview(number)
-        toolTip = "\(item.appName) — \(item.label)"
-        setAccessibilityElement(true); setAccessibilityRole(.button); setAccessibilityLabel(toolTip)
+        setAccessibilityElement(true); setAccessibilityRole(.button)
+        setAccessibilityLabel("\(item.appName) — \(item.label)")
         updateBackground()
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -99,7 +106,8 @@ final class WindowRow: NSView {
         super.layout()
         let size = min(25, Preferences.shared.textSize + 5)
         icon.frame = CGRect(x: (30 - size) / 2, y: (bounds.height - size) / 2, width: size, height: size)
-        label.frame = CGRect(x: 33, y: (bounds.height - 22) / 2, width: max(0, bounds.width - 39), height: 22)
+        let labelHeight = ceil(label.intrinsicContentSize.height)
+        label.frame = CGRect(x: 33, y: (bounds.height - labelHeight) / 2, width: max(0, bounds.width - 39), height: labelHeight)
         label.isHidden = bounds.width < 70
         number.frame = CGRect(x: 23, y: 0, width: 16, height: 12)
         number.isHidden = !Preferences.shared.showNumbers
@@ -109,13 +117,29 @@ final class WindowRow: NSView {
         trackingAreas.forEach(removeTrackingArea)
         addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
     }
-    override func mouseEntered(with event: NSEvent) { hovered = true; updateBackground() }
-    override func mouseExited(with event: NSEvent) { hovered = false; updateBackground() }
+    override func mouseEntered(with event: NSEvent) {
+        hovered = true; updateBackground(); dismissPreview()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.hovered, self.window?.isVisible == true,
+                  !self.visibleRect.isEmpty,
+                  self.label.isHidden || self.label.intrinsicContentSize.width > self.label.bounds.width else { return }
+            self.preview.show(item: self.item, row: self)
+        }
+        previewWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: work)
+    }
+    override func mouseExited(with event: NSEvent) { hovered = false; updateBackground(); dismissPreview() }
+    func dismissPreview() { previewWork?.cancel(); previewWork = nil; preview.hide() }
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        dismissPreview(); super.viewWillMove(toWindow: newWindow)
+    }
+    override func scrollWheel(with event: NSEvent) { dismissPreview(); super.scrollWheel(with: event) }
     private func updateBackground() { layer?.backgroundColor = (hovered ? NSColor.labelColor.withAlphaComponent(0.08) : item.focused ? NSColor.controlAccentColor.withAlphaComponent(0.10) : .clear).cgColor }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func mouseDown(with event: NSEvent) { activate?() }
-    override func accessibilityPerformPress() -> Bool { activate?(); return true }
+    override func mouseDown(with event: NSEvent) { dismissPreview(); activate?() }
+    override func accessibilityPerformPress() -> Bool { dismissPreview(); activate?(); return true }
     override func menu(for event: NSEvent) -> NSMenu? {
+        dismissPreview()
         let menu = NSMenu()
         menu.addAction(L("切换到窗口", "Switch to Window")) { [weak self] in self?.activate?() }
         if item.element != nil {
@@ -203,9 +227,11 @@ final class SidebarSurface: NSView {
 
 /// A scroll view normally consumes horizontal events before its parent sees them.
 final class SidebarScrollView: NSScrollView {
+    var willScroll: (() -> Void)?
     var hideGesture: (() -> Void)?
     private var gesture = SidebarGesture()
     override func scrollWheel(with event: NSEvent) {
+        willScroll?()
         if gesture.consume(event) { hideGesture?() }
         else { super.scrollWheel(with: event) }
     }
@@ -235,6 +261,13 @@ final class SidebarController {
     private let stack = NSStackView()
     private let toolbar = NSView()
     private var expanded = false
+    private var expansionWidth: CGFloat?
+    private var measuredTitleWidth: CGFloat = 0
+    var reservedWidth: CGFloat { Preferences.shared.resting == .expanded ? resolvedExpandedWidth : Preferences.shared.restingWidth }
+    private var resolvedExpandedWidth: CGFloat {
+        let p = Preferences.shared
+        return p.adaptiveWidth ? (expansionWidth ?? WindowTitle.expandedWidth(titleWidth: measuredTitleWidth, availableWidth: screen.visibleFrame.width)) : p.width
+    }
     private var temporarilyHidden = false
     private var leftSinceHide = false
     private var hoverStarted: TimeInterval?
@@ -259,6 +292,7 @@ final class SidebarController {
         panel.isReleasedWhenClosed = false
         surface.updateMaterial(Preferences.shared.sidebarMaterial)
         surface.hideGesture = { [weak self] in self?.hideTemporarily() }
+        scroll.willScroll = { [weak self] in self?.dismissPreviews() }
         scroll.hideGesture = { [weak self] in self?.hideTemporarily() }
         panel.contentView = surface
         toolbar.frame = CGRect(x: 0, y: 0, width: 320, height: 28)
@@ -278,6 +312,14 @@ final class SidebarController {
         let signature = "\(service.trusted)|" + groups.map { group in group.title + group.items.map { "\($0.id):\($0.label):\($0.focused):\($0.minimized):\($0.hidden)" }.joined() }.joined()
         if !force && signature == lastSignature { return }
         lastSignature = signature
+        measuredTitleWidth = groups.flatMap(\.items).map { item in
+            let text = WindowTitle.display(item.label, app: item.appName, bundleID: item.bundleID) + (item.minimized ? "  −" : "")
+            return (text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: p.textSize)]).width
+        }.max() ?? 0
+        if force { expansionWidth = nil }
+        if (expanded || p.resting == .expanded) && expansionWidth == nil && !groups.isEmpty {
+            expansionWidth = WindowTitle.expandedWidth(titleWidth: measuredTitleWidth, availableWidth: screen.visibleFrame.width)
+        }
         panel.title = "Sill — " + L("侧边栏", "Sidebar")
         panel.appearance = p.appearance
         surface.updateMaterial(p.sidebarMaterial)
@@ -332,22 +374,33 @@ final class SidebarController {
             exitStarted = nil
             if hoverStarted == nil { hoverStarted = now }
             if now - (hoverStarted ?? now) > 0.12 && (!expanded || temporarilyHidden) {
-                temporarilyHidden = false; expanded = true; layout(animated: true)
+                temporarilyHidden = false
+                if shouldCaptureExpansionWidth { expansionWidth = WindowTitle.expandedWidth(titleWidth: measuredTitleWidth, availableWidth: screen.visibleFrame.width) }
+                expanded = true; layout(animated: true)
             }
         } else {
             hoverStarted = nil
             if exitStarted == nil { exitStarted = now }
-            if expanded && now - (exitStarted ?? now) > 0.28 { expanded = false; layout(animated: true) }
+            if expanded && now - (exitStarted ?? now) > 0.28 {
+                expanded = false
+                if Preferences.shared.resting != .expanded { expansionWidth = nil }
+                dismissPreviews(); layout(animated: true)
+            }
         }
     }
+    private var shouldCaptureExpansionWidth: Bool { Preferences.shared.resting != .expanded || expansionWidth == nil }
+    private func dismissPreviews() { stack.arrangedSubviews.compactMap { $0 as? WindowRow }.forEach { $0.dismissPreview() } }
     func hideTemporarily() {
+        dismissPreviews(); expansionWidth = nil
         temporarilyHidden = true; leftSinceHide = false; expanded = false
         hoverStarted = nil; layout(animated: true)
     }
     private func layout(animated: Bool) {
         let p = Preferences.shared
-        let width = temporarilyHidden ? 3 : expanded ? p.width : p.restingWidth
-        let groupHeight: CGFloat = width < 100 ? 10 : 24
+        let requestedWidth = temporarilyHidden ? 3 : (expanded || p.resting == .expanded) ? resolvedExpandedWidth : p.restingWidth
+        let width = min(requestedWidth, screen.visibleFrame.width)
+        // Keep every window at the same vertical position across hover transitions.
+        let groupHeight: CGFloat = 24
         groupHeights.forEach { $0.constant = groupHeight }
         if let emptyHeight {
             emptyHeight.constant = width < 180 ? 38 : 110

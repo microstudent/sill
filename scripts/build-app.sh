@@ -2,8 +2,27 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 configuration="${CONFIGURATION:-release}"
-swift build -c "$configuration"
+sdk_path="$(xcrun --sdk macosx --show-sdk-path)"
+sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+deployment_target="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' Resources/Info.plist)"
+if [[ "${sdk_version%%.*}" -lt 26 ]]; then
+    printf 'Sill requires the macOS 26 SDK or later. Select Xcode 26+ with xcode-select.\n' >&2
+    exit 1
+fi
+# Some SwiftPM build engines record the deployment target as the linked SDK.
+# AppKit uses the linked SDK to select modern appearance behavior, so preserve
+# macOS 14 compatibility while explicitly recording the SDK we actually build with.
+swift build -c "$configuration" --sdk "$sdk_path" \
+    -Xlinker -platform_version -Xlinker macos \
+    -Xlinker "$deployment_target" -Xlinker "$sdk_version"
 bin_dir="$(swift build -c "$configuration" --show-bin-path)"
+if ! xcrun vtool -show-build "$bin_dir/Sill" | awk -v expected="$sdk_version" '
+    $1 == "sdk" { found = 1; if ($2 != expected) mismatch = 1 }
+    END { exit (!found || mismatch) }
+'; then
+    printf 'The executable does not record the selected macOS SDK (%s).\n' "$sdk_version" >&2
+    exit 1
+fi
 app="$PWD/build/Sill.app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin_dir/Sill" "$app/Contents/MacOS/Sill"

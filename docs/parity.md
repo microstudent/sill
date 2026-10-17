@@ -11,11 +11,11 @@ This is a feature comparison with Contexts 3.9.0, based on the original app's se
 | Window icons and titles | Implemented | Active-window highlighting |
 | Four resting modes and hover expansion | Implemented | Hidden mode retains a 3 pt activation edge |
 | Left/right and top/center/bottom placement | Implemented | Uses the visible display frame |
-| Sidebar and text sizing | Implemented | Width 180–600 pt; text 11–20 pt |
+| Sidebar and text sizing | Implemented | Automatic width 300–420 pt; manual width 180–600 pt; text 11–20 pt |
 | Liquid Glass / Clear Glass / Classic Frosted | Implemented | Native glass on macOS 26+; frosted fallback on older systems |
 | All/primary/no displays | Implemented | Rebuilds on display changes; hardware combinations need testing |
 | Five window scopes | Implemented | Visibility is inferred using public APIs |
-| Automatic window clearance | Implemented | Off by default; manual adjustments pause clearance for 60 seconds |
+| Automatic window clearance | Implemented | Off by default; a separate default-off switch enables the 60-second pause after manual resizing |
 | Temporary and horizontal-scroll hiding | Implemented | Physical gesture validation pending |
 | Space grouping | Partial | Visible / other and hidden / full screen; no desktop numbers |
 | Single group or grouping by app | Implemented | No manual group ordering |
@@ -46,7 +46,10 @@ The development machine runs macOS 27.0.1 on Apple Silicon. The deployment targe
 - [x] Minimizing and restoring a Finder window, with corresponding regrouping.
 - [x] Searching for “应用” and switching to Finder with Return.
 - [x] Physical Control–Option–Space shortcut confirmed by the user.
-- [x] 11 unit tests covering geometry, search, pinyin, initials, mixed tokens, and ü/v input.
+- [x] 19 unit tests covering geometry, search, pinyin, initials, mixed tokens, ü/v input, conservative title formatting, width limits, preview placement, and stable application clustering.
+- [x] Installed app: expanded and collapsed lists have identical height and aligned icon rows with the same windows.
+- [x] Installed app: two Edge windows are adjacent within the current-desktop group; visibility sections remain separate.
+- [x] Installed app: 420 pt adaptive expansion and a wrapping full-title preview for a truncated editor title (also confirmed by a user screenshot).
 - [x] Settings open / close / reopen changes the app's activation policy to regular / accessory / regular, while the sidebar remains running.
 - [x] Minimal About page checked in the installed app.
 - [ ] Accurate switching among multiple windows of the same app.
@@ -56,7 +59,7 @@ The development machine runs macOS 27.0.1 on Apple Silicon. The deployment targe
 - [ ] Full arrow-key, Tab, and Escape navigation paths.
 - [ ] Multi-monitor hardware, unplugging displays, resolutions, and Dock placement.
 - [ ] Full screen, other Spaces, and Stage Manager.
-- [ ] Automatic clearance, manual-adjustment pause, and conditional restoration.
+- [ ] Automatic clearance, optional manual-adjustment pause, and conditional restoration.
 - [ ] Login items, revoking access, and reauthorization.
 - [x] Native Liquid Glass and Classic Frosted rendering with real windows on macOS 27.0.1; material changes keep the window list visible.
 - [ ] Clear Glass visual checks and older-system material fallback.
