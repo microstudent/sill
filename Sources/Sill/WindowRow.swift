@@ -71,11 +71,11 @@ final class WindowRow: NSView {
     override func menu(for event: NSEvent) -> NSMenu? {
         dismissPreview()
         let menu = NSMenu()
-        menu.addAction(L("切换到窗口", "Switch to Window")) { [weak self] in self?.activate?() }
         if item.element != nil {
-            menu.addAction(L("最小化", "Minimize")) { [weak self] in guard let self else { return }; self.service.minimize(self.item) }
             menu.addAction(L("关闭窗口", "Close Window")) { [weak self] in guard let self else { return }; self.service.close(self.item) }
+            menu.addAction(L("最小化", "Minimize")) { [weak self] in guard let self else { return }; self.service.minimize(self.item) }
         }
+        menu.addAction(L("切换到窗口", "Switch to Window")) { [weak self] in self?.activate?() }
         menu.addItem(.separator())
         menu.addAction(L("隐藏应用", "Hide App")) { [weak self] in guard let self else { return }; NSRunningApplication(processIdentifier: self.item.pid)?.hide() }
         menu.addAction(L("从列表排除此应用", "Exclude This App")) { [weak self] in

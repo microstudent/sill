@@ -2,18 +2,26 @@ import SwiftUI
 import AppKit
 import ServiceManagement
 
+final class SettingsNavigation: ObservableObject { @Published var page = "welcome" }
+
 final class SettingsController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private let service: WindowService
+    private let hotkeys: HotKeyManager
+    private let navigation = SettingsNavigation()
     var restoreWindows: (() -> Void)?
     var showSearch: (() -> Void)?
-    init(service: WindowService) { self.service = service; super.init() }
-    func show() {
+    init(service: WindowService, hotkeys: HotKeyManager) { self.service = service; self.hotkeys = hotkeys; super.init() }
+    func show(page: String? = nil) {
+        if let page { navigation.page = page }
         if window == nil {
-            let view = SettingsView(preferences: .shared, service: service, restore: { [weak self] in self?.restoreWindows?() }, search: { [weak self] in self?.showSearch?() })
-            let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 850, height: 660), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+            let view = SettingsView(preferences: .shared, service: service, navigation: navigation, hotkeys: hotkeys, restore: { [weak self] in self?.restoreWindows?() }, search: { [weak self] in self?.showSearch?() })
+            let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 860, height: 660), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
             window.contentView = NSHostingView(rootView: view)
-            window.minSize = NSSize(width: 780, height: 620)
+            window.minSize = NSSize(width: 800, height: 620)
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.backgroundColor = .windowBackgroundColor
             window.isReleasedWhenClosed = false; window.center()
             window.delegate = self
             window.setFrameAutosaveName("SillSettings")
@@ -35,9 +43,11 @@ final class SettingsController: NSObject, NSWindowDelegate {
 struct SettingsView: View {
     @ObservedObject var preferences: Preferences
     @ObservedObject var service: WindowService
+    @ObservedObject var navigation: SettingsNavigation
+    @ObservedObject var hotkeys: HotKeyManager
     let restore: () -> Void
     let search: () -> Void
-    @State private var page = "welcome"
+    private var page: String { navigation.page }
     @State private var loginEnabled = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
     private var pages: [(String, String, String)] { [
@@ -49,32 +59,54 @@ struct SettingsView: View {
         ("about", L("关于", "About"), "info.circle")
     ] }
     var body: some View {
-        HSplitView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(spacing: 10) {
-                    Image(systemName: "sidebar.left").font(.system(size: 26, weight: .medium)).foregroundStyle(.blue)
-                    VStack(alignment: .leading, spacing: 2) { Text("Sill").font(.headline); Text(L("窗口，触手可及", "Your windows, within reach")).font(.caption).foregroundStyle(.secondary) }
-                }.padding(.horizontal, 16).padding(.top, 25)
-                List(selection: $page) {
-                    ForEach(pages, id: \.0) { id, title, symbol in Label(title, systemImage: symbol).tag(id).padding(.vertical, 6) }
-                }.listStyle(.sidebar)
-                Label(service.trusted ? L("辅助功能已授权", "Accessibility enabled") : L("等待辅助功能权限", "Accessibility required"), systemImage: service.trusted ? "checkmark.circle.fill" : "exclamationmark.circle")
-                    .font(.caption).foregroundStyle(service.trusted ? Color.green : Color.orange).padding(16)
-            }.frame(minWidth: 210, idealWidth: 220, maxWidth: 260)
+        HStack(spacing: 0) {
+            SettingsNavigationPane(material: preferences.sidebarMaterial) {
+                VStack(alignment: .leading, spacing: 0) {
+                    List(selection: $navigation.page) {
+                        ForEach(pages, id: \.0) { id, title, symbol in
+                            HStack(spacing: 9) {
+                                Image(systemName: symbol).font(.system(size: 15, weight: .regular))
+                                    .symbolRenderingMode(.hierarchical).frame(width: 20, height: 20)
+                                Text(id == "appearance" ? L("外观与语言", "Appearance") : title).font(.system(size: 13)).help(title)
+                            }.tag(id).padding(.vertical, 4)
+                        }
+                    }.listStyle(.sidebar).scrollContentBackground(.hidden).padding(.top, 12)
+                    if !service.trusted {
+                        Label(L("需要辅助功能权限", "Accessibility required"), systemImage: "exclamationmark.circle")
+                            .font(.caption).foregroundStyle(.orange).padding(14)
+                    }
+                }.background(Color(nsColor: .windowBackgroundColor).opacity(0.5))
+            }.frame(width: 208)
+            Rectangle().fill(Color(nsColor: .separatorColor).opacity(0.35)).frame(width: 0.5)
             VStack(alignment: .leading, spacing: 0) {
-                Text(pages.first { $0.0 == page }?.1 ?? "").font(.system(size: 24, weight: .semibold)).padding(.horizontal, 28).padding(.top, 26).padding(.bottom, 8)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(pages.first { $0.0 == page }?.1 ?? "").font(.system(size: 22, weight: .semibold))
+                    Text(pageDescription).font(.callout).foregroundStyle(.secondary)
+                }.padding(.horizontal, 28).padding(.top, 36).padding(.bottom, 4)
                 Form {
                     switch page {
                     case "sidebar": sidebar
                     case "appearance": appearance
                     case "rules": rules
-                    case "keyboard": keyboard
+                    case "keyboard": ShortcutSettings(preferences: preferences, hotkeys: hotkeys, search: search)
                     case "about": about
                     default: welcome
                     }
-                }.formStyle(.grouped).id(page)
-            }.frame(minWidth: 540, maxWidth: .infinity, maxHeight: .infinity)
-        }.frame(minWidth: 780, minHeight: 580)
+                }.formStyle(.grouped).scrollContentBackground(.hidden).id(page)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .windowBackgroundColor))
+        }.frame(minWidth: 800, minHeight: 580).background(Color(nsColor: .windowBackgroundColor))
+            .ignoresSafeArea(.container, edges: .top)
+    }
+    private var pageDescription: String {
+        switch page {
+        case "sidebar": return L("让窗口出现在顺手的位置。", "Keep your windows within easy reach.")
+        case "appearance": return L("选择适合你的外观与阅读体验。", "Make Sill feel at home on your Mac.")
+        case "rules": return L("只留下你想看到的窗口。", "Choose the windows you want to see.")
+        case "keyboard": return L("用熟悉的组合键，快速找到窗口。", "Reach any window with shortcuts that feel familiar.")
+        case "about": return L("窗口在侧，随手可达。", "Your windows, within reach.")
+        default: return L("从屏幕边缘，轻松切换每一个窗口。", "Switch between windows from the edge of your screen.")
+        }
     }
     private var welcome: some View {
         Group {
@@ -82,19 +114,19 @@ struct SettingsView: View {
                 Text(L("把窗口放在屏幕边缘，悬停展开，点击即达。", "Keep your windows at the edge. Hover to expand. Click to switch.")).font(.title3).padding(.vertical, 8)
                 Text(L("更轻松地找到并切换每一个窗口。", "Find and switch between your windows with ease.")).foregroundStyle(.secondary)
             }
-            Section(L("辅助功能权限", "Accessibility Permission")) {
-                Label(service.trusted ? L("已授权，可以读取和切换窗口", "Authorized to list and switch windows") : L("需要你在系统设置中开启权限", "Enable access in System Settings"), systemImage: service.trusted ? "checkmark.shield" : "hand.raised")
-                Text(L("用于读取窗口标题、切换、最小化和调整窗口。无需屏幕录制权限；窗口信息仅在本机处理。", "Used to read titles, switch, minimize and resize windows. No Screen Recording permission is required. Window information stays on this Mac.")).font(.callout).foregroundStyle(.secondary)
-                HStack {
-                    Button(L("打开辅助功能设置", "Open Accessibility Settings")) {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+            if !service.trusted {
+                Section(L("辅助功能权限", "Accessibility Permission")) {
+                    Label(L("需要你在系统设置中开启权限", "Enable access in System Settings"), systemImage: "hand.raised")
+                    Text(L("用于读取窗口标题、切换、最小化和调整窗口。无需屏幕录制权限；窗口信息仅在本机处理。", "Used to read titles, switch, minimize and resize windows. No Screen Recording permission is required. Window information stays on this Mac.")).font(.callout).foregroundStyle(.secondary)
+                    HStack {
+                        Button(L("打开辅助功能设置", "Open Accessibility Settings")) {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                        }
+                        Button(L("重新检查", "Check Again")) { service.refresh() }
                     }
-                    Button(L("重新检查", "Check Again")) { service.refresh() }
-                }
-                Button(L("在 Finder 中显示应用", "Show App in Finder")) {
-                    NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
-                }
-                if !service.trusted {
+                    Button(L("在 Finder 中显示应用", "Show App in Finder")) {
+                        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+                    }
                     Text(L("在列表中添加并开启 Sill。授权后会自动加载窗口。", "Add and enable Sill in the list. Windows load automatically after access is granted.")).font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -160,35 +192,41 @@ struct SettingsView: View {
     }
     private var appearance: some View {
         Group {
-            Section(L("语言", "Language")) {
-                Picker(L("界面语言", "Interface Language"), selection: $preferences.language) {
-                    Text(L("跟随系统", "Follow System")).tag("system")
-                    Text("简体中文").tag("zh-Hans"); Text("English").tag("en")
-                }
-                Text(L("立即生效，无需重启。", "Applies immediately, without restarting.")).foregroundStyle(.secondary).font(.caption)
-            }
-            Section(L("外观", "Appearance")) {
+            Section {
+                HStack(spacing: 16) {
+                    ThemeChoice(value: "system", title: L("跟随系统", "Automatic"), selection: $preferences.theme)
+                    ThemeChoice(value: "light", title: L("浅色", "Light"), selection: $preferences.theme)
+                    ThemeChoice(value: "dark", title: L("深色", "Dark"), selection: $preferences.theme)
+                }.frame(maxWidth: .infinity).padding(.vertical, 6)
+            } header: { Text(L("主题", "Theme")) }
+            Section {
                 Picker(L("界面材质", "Surface Material"), selection: $preferences.sidebarMaterial) {
                     if #available(macOS 26.0, *) {
                         Text(L("液态玻璃", "Liquid Glass")).tag("glass")
                         Text(L("通透玻璃", "Clear Glass")).tag("clearGlass")
                     } else {
-                        Text(L("液态玻璃（使用毛玻璃）", "Liquid Glass (Frosted Fallback)")).tag("glass")
-                        Text(L("通透玻璃（使用毛玻璃）", "Clear Glass (Frosted Fallback)")).tag("clearGlass")
+                        Text(L("液态玻璃（毛玻璃替代）", "Liquid Glass (Frosted)")).tag("glass")
+                        Text(L("通透玻璃（毛玻璃替代）", "Clear Glass (Frosted)")).tag("clearGlass")
                     }
                     Text(L("经典毛玻璃", "Classic Frosted")).tag("frosted")
                 }
-                if #available(macOS 26.0, *) {
-                    Text(L("统一应用于侧边栏与窗口搜索。液态玻璃呈现柔和层次，通透玻璃更轻盈，经典毛玻璃更柔和。", "Applies to the sidebar and window search. Liquid Glass adds depth, Clear Glass is more transparent, and Classic Frosted gives a softer blur.")).font(.caption).foregroundStyle(.secondary)
-                } else {
-                    Text(L("液态玻璃需要 macOS 26 或更新版本，当前系统使用经典毛玻璃。", "Liquid Glass requires macOS 26 or later. This Mac uses Classic Frosted.")).font(.caption).foregroundStyle(.secondary)
+            } header: { Text(L("材质", "Material")) } footer: {
+                Text(L("应用于侧边栏、窗口搜索和设置导航。", "Applies to the sidebar, window search and settings navigation."))
+            }
+            Section {
+                HStack(spacing: 16) {
+                    Text(L("文字和图标大小", "Text & Icon Size"))
+                    Spacer(minLength: 16)
+                    Slider(value: $preferences.textSize, in: 11...20, step: 1).frame(maxWidth: 190)
+                        .accessibilityLabel(L("文字和图标大小", "Text & Icon Size"))
+                    Text("\(Int(preferences.textSize))").monospacedDigit().foregroundStyle(.secondary).frame(width: 22)
                 }
-                Picker(L("主题", "Theme"), selection: $preferences.theme) {
-                    Text(L("跟随系统", "Follow System")).tag("system")
-                    Text(L("浅色", "Light")).tag("light"); Text(L("深色", "Dark")).tag("dark")
-                }.pickerStyle(.segmented)
-                HStack { Text(L("文字和图标大小", "Text & Icon Size")); Slider(value: $preferences.textSize, in: 11...20, step: 1); Text("\(Int(preferences.textSize))").monospacedDigit() }
-                Text(L("采用系统字体与背景材质，遵循系统的减少动态效果设置。", "Uses system fonts and materials, and respects Reduce Motion.")).font(.caption).foregroundStyle(.secondary)
+                Picker(L("界面语言", "Language"), selection: $preferences.language) {
+                    Text(L("跟随系统", "System Default")).tag("system")
+                    Text("简体中文").tag("zh-Hans"); Text("English").tag("en")
+                }
+            } header: { Text(L("文字与语言", "Text & Language")) } footer: {
+                Text(L("更改立即生效。", "Changes apply immediately."))
             }
         }
     }
@@ -211,25 +249,6 @@ struct SettingsView: View {
                 if !preferences.titleFilter.isEmpty && (try? NSRegularExpression(pattern: preferences.titleFilter)) == nil {
                     Text(L("正则表达式无效，暂不应用此规则。", "Invalid regular expression. This rule is not applied.")).font(.caption).foregroundStyle(.orange)
                 }
-            }
-        }
-    }
-    private var keyboard: some View {
-        Group {
-            Section(L("窗口搜索", "Window Search")) {
-                Toggle(L("Control + Option + 空格 打开搜索", "Control + Option + Space Opens Search"), isOn: $preferences.searchShortcut)
-                Text(L("支持中文、英文、全拼和拼音首字母，例如微信可输入 weixin 或 wx。可用空格组合多个关键词。方向键或 Tab 选择，Enter 切换，Esc 取消。", "Search in Chinese, English, full pinyin or initials: use weixin or wx for 微信. Separate keywords with spaces. Select with arrows or Tab, switch with Enter, cancel with Esc.")).foregroundStyle(.secondary)
-                Button(L("试用搜索", "Try Search"), action: search)
-            }
-            Section(L("数字切换", "Number Switching")) {
-                Toggle(L("Control + Option + 1–9 切换窗口", "Control + Option + 1–9 Switches Windows"), isOn: $preferences.numberShortcut)
-                Toggle(L("显示前 9 个窗口的编号", "Show Numbers for the First 9 Windows"), isOn: $preferences.showNumbers)
-                Text(L("数字对应鼠标所在显示器侧边栏的前九个窗口。", "Numbers correspond to the first nine windows in the sidebar on the pointer’s display.")).font(.caption).foregroundStyle(.secondary)
-            }
-            Section(L("面板操作", "Panel Actions")) {
-                LabeledContent(L("关闭窗口", "Close Window"), value: "⌘W")
-                LabeledContent(L("最小化窗口", "Minimize Window"), value: "⌘M")
-                LabeledContent(L("隐藏应用", "Hide App"), value: "⌘H")
             }
         }
     }

@@ -37,6 +37,7 @@ final class Preferences: ObservableObject {
     @Published var searchShortcut: Bool { didSet { save(searchShortcut, "searchShortcut") } }
     @Published var numberShortcut: Bool { didSet { save(numberShortcut, "numberShortcut") } }
     @Published var showNumbers: Bool { didSet { save(showNumbers, "showNumbers") } }
+    @Published var shortcuts: ShortcutConfiguration { didSet { if let data = try? JSONEncoder().encode(shortcuts) { save(data, "shortcuts") } } }
     var onChange: (() -> Void)?
 
     init() {
@@ -44,6 +45,7 @@ final class Preferences: ObservableObject {
             "textSize":14.0, "vertical":"center", "displays":"all", "scope":"displayAll", "grouping":"visibility",
             "theme":"system", "sidebarMaterial":"glass", "showMinimized":true, "showWindowless":false, "autoAvoid":false, "pauseAfterManualResize":false,
             "excluded":"", "titleFilter":"", "searchShortcut":true, "numberShortcut":false, "showNumbers":false])
+        shortcuts = ShortcutConfiguration.restored(from: defaults.data(forKey: "shortcuts"))
         language = defaults.string(forKey: "language")!
         edge = SidebarEdge(rawValue: defaults.string(forKey: "edge")!) ?? .left
         resting = RestingMode(rawValue: defaults.string(forKey: "resting")!) ?? .icons

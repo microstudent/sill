@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import Combine
 import SillCore
+import OSLog
 
 struct WindowItem: Identifiable {
     let id: UInt64
@@ -39,6 +40,8 @@ final class WindowService: ObservableObject {
     @Published private(set) var trusted = AXIsProcessTrusted()
     @Published var actionError: String?
     var onUpdate: (() -> Void)?
+    private var activation: WindowActivationSession?
+    private let activationLog = Logger(subsystem: "local.sill.app", category: "WindowActivation")
     private let queue = DispatchQueue(label: "app.sill.accessibility", qos: .userInitiated)
     private var observers: [pid_t: AXObserver] = [:]
     private var observedElements: [pid_t: [AXUIElement]] = [:]
@@ -70,6 +73,7 @@ final class WindowService: ObservableObject {
     }
     func stop() {
         stopped = true
+        activation?.cancel(); activation = nil
         authorizationGeneration &+= 1
         timer?.invalidate(); pending?.cancel()
         workspaceTokens.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
@@ -98,6 +102,7 @@ final class WindowService: ObservableObject {
         let changed = authorized != trusted
         if changed { authorizationGeneration &+= 1; trusted = authorized }
         if !authorized {
+            activation?.cancel(); activation = nil
             let hadWindows = !windows.isEmpty
             windows = []
             if changed || hadWindows { onUpdate?() }
@@ -221,19 +226,24 @@ final class WindowService: ObservableObject {
         return result
     }
     func activate(_ item: WindowItem) {
-        guard let app = NSRunningApplication(processIdentifier: item.pid) else { scheduleRefresh(); return }
-        app.unhide()
-        app.activate(options: [])
-        queue.async {
-            guard let element = item.element else { return }
-            AXUIElementSetAttributeValue(element, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
-            AXUIElementSetAttributeValue(element, kAXMainAttribute as CFString, kCFBooleanTrue)
-            let result = AXUIElementPerformAction(element, kAXRaiseAction as CFString)
-            DispatchQueue.main.async {
-                if result != .success { self.actionError = L("该应用未响应窗口切换，请重试。", "This app did not respond to window switching. Try again.") }
-                self.scheduleRefresh()
+        activation?.cancel(); activation = nil
+        guard !stopped, updateAuthorization(), let app = NSRunningApplication(processIdentifier: item.pid) else { scheduleRefresh(); return }
+        let driver = AccessibilityWindowActivation(app: app, element: item.element, queue: queue)
+        activation = WindowActivationSession(driver: driver, schedule: { delay, action in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: action)
+        }, completion: { [weak self] outcome in
+            guard let self else { return }
+            self.activationLog.notice("finished target=\(item.pid) outcome=\(String(describing: outcome), privacy: .public)")
+            switch outcome {
+            case .confirmed: break
+            case .unavailable: self.actionError = L("目标窗口已关闭，请刷新列表后重试。", "The target window has closed. Refresh the list and try again.")
+            case .unconfirmed: self.actionError = L("未能确认目标窗口已获得焦点，请重试。", "Could not confirm that the target window received focus. Please try again.")
+            case .cancelled: return
             }
-        }
+            self.activation = nil
+            self.scheduleRefresh()
+        })
+        activation?.start()
     }
     func minimize(_ item: WindowItem) { perform(item) { AXUIElementSetAttributeValue($0, kAXMinimizedAttribute as CFString, kCFBooleanTrue) } }
     func close(_ item: WindowItem) {

@@ -28,7 +28,7 @@ This is a feature comparison with Contexts 3.9.0, based on the original app's se
 | Search learning and typo tolerance | Not implemented | Token substring matching |
 | Hold-Fn / modifier search | Not implemented | No arbitrary keyboard monitoring |
 | Command–Tab replacement | Not implemented | Existing system shortcuts remain available |
-| Number shortcuts | Partial | Optional positions 1–9; no two-digit positions |
+| Number shortcuts | Partial | Optional positions 1–9 with customizable modifiers; no two-digit positions |
 | Close / minimize / hide from search | Implemented | Command–W / M / H |
 | Dock badges | Not implemented | No reliable public cross-app API |
 | Global trackpad-edge gestures | Not implemented | No private multitouch APIs |
@@ -70,3 +70,7 @@ The development machine runs macOS 27.0.1 on Apple Silicon. The deployment targe
 The window-switching and Chinese-search checks above were performed on the development app before it was renamed to Sill. Accessibility authorization and real-window listing were subsequently verified in the installed Sill app, including after the Liquid Glass update. Real-window pinyin-initial search and Return activation were subsequently verified in the installed Sill app.
 
 Local check output lives in the ignored `logs/` directory. Unchecked items are not represented as verified behavior. CI builds and tests do not replace interactive validation.
+
+- Custom shortcut configuration: validated persistence and collision detection are covered by unit tests; recording, invalid-key rejection, duplicate rejection, restart persistence and menu navigation are checked in the installed app. An external Carbon registration fixture verifies that a conflicting binding is rejected and the previous binding remains registered. Physical triggering of a newly customized binding remains a manual check.
+- Settings redesign uses native glass navigation and standard form surfaces, with live theme previews.
+- Window activation now waits for the target app, raises the selected window, verifies focus and restoration, and retries up to four times. A new selection cancels the previous request. All 33 unit tests pass, including six activation regression cases. The installed app confirmed Finder activation and switching back and forth between two TRAE windows. The reported intermittent ChatGPT obstruction has not been reproduced and still needs user validation.

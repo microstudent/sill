@@ -67,12 +67,14 @@ If access stops working after a rebuild or a change of signing identity, remove 
 
 | Shortcut | Action |
 | --- | --- |
-| `Control` + `Option` + `Space` | Open window search |
+| `Control` + `Option` + `Space` | Open window search (customizable) |
 | `↑` / `↓`, `Tab` / `Shift` + `Tab` | Select a search result |
 | `Return` | Switch to the selected window |
 | `Escape` | Dismiss search |
 | `Command` + `W` / `M` / `H` | In search: close the selected window, minimize it, or hide its app |
-| `Control` + `Option` + `1` … `9` | Switch by sidebar position; enable in Settings first |
+| `Control` + `Option` + `1` … `9` | Switch by sidebar position; enable in Settings first; modifiers are customizable |
+
+Open **Shortcuts…** from the sidebar or Sill menu to record a search shortcut or change number-switching modifiers. Settings are saved automatically; conflicting active bindings are rejected without replacing the previous configuration. The settings navigation uses the selected native material on macOS 26+, with a frosted fallback on earlier systems.
 
 For example, `weixin` or `wx` finds 微信; `yingyongchengxu` or `yycx` finds 应用程序. Mixed queries such as `xmsz workspace` are supported. Pronunciation follows the system's offline transliteration.
 

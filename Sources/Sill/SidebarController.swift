@@ -32,6 +32,7 @@ final class SidebarController {
     private var groupHeights: [NSLayoutConstraint] = []
     private var emptyHeight: NSLayoutConstraint?
     private var lastSignature = ""
+    var showShortcuts: (() -> Void)?
     var showSettings: (() -> Void)?
     var showSearch: (() -> Void)?
 
@@ -192,6 +193,7 @@ final class SidebarController {
         menu.addItem(.separator())
         menu.addAction(L("自动调整窗口宽度", "Auto-adjust Window Widths"), checked: p.autoAvoid) { p.autoAvoid.toggle() }
         menu.addAction(L("设置…", "Settings…")) { [weak self] in self?.showSettings?() }
+        menu.addAction(L("快捷键…", "Shortcuts…")) { [weak self] in self?.showShortcuts?() }
         menu.popUp(positioning: nil, at: CGPoint(x: 10, y: 0), in: toolbar)
         menuOpen = false
     }

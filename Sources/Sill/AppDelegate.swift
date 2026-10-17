@@ -2,7 +2,7 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let service = WindowService()
-    private lazy var settings = SettingsController(service: service)
+    private lazy var settings = SettingsController(service: service, hotkeys: hotkeys)
     private lazy var search = SearchController(service: service)
     private lazy var avoidance = WindowAvoidance(service: service)
     private let hotkeys = HotKeyManager()
@@ -61,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sidebars.forEach { $0.panel.orderOut(nil) }; sidebars.removeAll()
         for screen in sidebarScreens {
             let sidebar = SidebarController(screen: screen, service: service)
+            sidebar.showShortcuts = { [weak self] in self?.settings.show(page: "keyboard") }
             sidebar.showSettings = { [weak self] in self?.settings.show() }
             sidebar.showSearch = { [weak self] in self?.search.show() }
             sidebars.append(sidebar)
@@ -83,7 +84,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if topology != lastTopology { lastTopology = topology; rebuildSidebars() }
         else { sidebars.forEach { $0.rebuild(force: true) } }
         hotkeys.configure()
-        if let error = hotkeys.error { service.actionError = error }
         updateMenus()
         search.refresh()
         updateAvoidance()
@@ -109,6 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addAction(L("搜索窗口…", "Search Windows…")) { [weak self] in self?.search.show() }
         menu.addAction(L("设置…", "Settings…")) { [weak self] in self?.settings.show() }
+        menu.addAction(L("快捷键…", "Shortcuts…")) { [weak self] in self?.settings.show(page: "keyboard") }
         menu.addAction(L("刷新窗口列表", "Refresh Windows")) { [weak self] in self?.service.refresh() }
         menu.addItem(.separator())
         menu.addAction(L("暂时隐藏侧边栏", "Hide Sidebars For Now")) { [weak self] in self?.sidebars.forEach { $0.hideTemporarily() } }
@@ -120,6 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appItem = NSMenuItem(); let appMenu = NSMenu()
         let settingsItem = appMenu.addAction(L("设置…", "Settings…")) { [weak self] in self?.settings.show() }
         settingsItem.keyEquivalent = ","
+        appMenu.addAction(L("快捷键…", "Shortcuts…")) { [weak self] in self?.settings.show(page: "keyboard") }
         appMenu.addItem(.separator())
         let quit = appMenu.addAction(L("退出 Sill", "Quit Sill")) { NSApp.terminate(nil) }
         quit.keyEquivalent = "q"
