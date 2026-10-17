@@ -12,7 +12,7 @@ final class SidebarController {
     private let service: WindowService
     private let surface = SidebarSurface()
     private let scroll = SidebarScrollView()
-    private let stack = NSStackView()
+    private let stack = SidebarStackView()
     private let toolbar = NSView()
     private var expanded = false
     private var expansionWidth: CGFloat?

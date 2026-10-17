@@ -1,11 +1,16 @@
 import AppKit
 
-final class SidebarSurface: NSView {
-    let content = NSView()
-    var hideGesture: (() -> Void)?
-    private var gesture = SidebarGesture()
+class MaterialSurface: NSView {
+    let content = MaterialContentView()
+    private let cornerRadius: CGFloat
     private var background: NSView?
     private var currentMaterial = ""
+
+    init(cornerRadius: CGFloat = 11) {
+        self.cornerRadius = cornerRadius
+        super.init(frame: .zero)
+    }
+    required init?(coder: NSCoder) { fatalError() }
 
     func updateMaterial(_ requested: String) {
         let material: String
@@ -16,6 +21,8 @@ final class SidebarSurface: NSView {
         }
         guard currentMaterial != material else { return }
         currentMaterial = material
+        content.clearGlass = material == "clearGlass"
+        content.cornerRadius = cornerRadius
         content.removeFromSuperview()
         background?.removeFromSuperview()
 
@@ -23,7 +30,7 @@ final class SidebarSurface: NSView {
         if #available(macOS 26.0, *), material != "frosted" {
             let glass = NSGlassEffectView()
             glass.style = material == "clearGlass" ? .clear : .regular
-            glass.cornerRadius = 11
+            glass.cornerRadius = cornerRadius
             // Only contentView is guaranteed to render above the native glass.
             glass.contentView = content
             effect = glass
@@ -33,7 +40,7 @@ final class SidebarSurface: NSView {
             frosted.blendingMode = .behindWindow
             frosted.state = .active
             frosted.wantsLayer = true
-            frosted.layer?.cornerRadius = 11
+            frosted.layer?.cornerRadius = cornerRadius
             frosted.layer?.masksToBounds = true
             frosted.addSubview(content)
             effect = frosted
@@ -45,6 +52,28 @@ final class SidebarSurface: NSView {
         addSubview(effect)
         background = effect
     }
+}
+
+/// Clear glass can sit over arbitrary desktop content. A translucent neutral
+/// wash keeps dense text legible while retaining the native glass edges.
+final class MaterialContentView: NSView {
+    var clearGlass = false { didSet { needsDisplay = true } }
+    var cornerRadius: CGFloat = 11
+    override func draw(_ dirtyRect: NSRect) {
+        guard clearGlass else { return }
+        NSColor.windowBackgroundColor.withAlphaComponent(0.68).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: cornerRadius, yRadius: cornerRadius).fill()
+    }
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+}
+
+final class SidebarSurface: MaterialSurface {
+    var hideGesture: (() -> Void)?
+    private var gesture = SidebarGesture()
+
     override func scrollWheel(with event: NSEvent) {
         if gesture.consume(event) { hideGesture?() }
         else { super.scrollWheel(with: event) }

@@ -168,7 +168,7 @@ struct SettingsView: View {
                 Text(L("立即生效，无需重启。", "Applies immediately, without restarting.")).foregroundStyle(.secondary).font(.caption)
             }
             Section(L("外观", "Appearance")) {
-                Picker(L("侧边栏材质", "Sidebar Material"), selection: $preferences.sidebarMaterial) {
+                Picker(L("界面材质", "Surface Material"), selection: $preferences.sidebarMaterial) {
                     if #available(macOS 26.0, *) {
                         Text(L("液态玻璃", "Liquid Glass")).tag("glass")
                         Text(L("通透玻璃", "Clear Glass")).tag("clearGlass")
@@ -179,7 +179,7 @@ struct SettingsView: View {
                     Text(L("经典毛玻璃", "Classic Frosted")).tag("frosted")
                 }
                 if #available(macOS 26.0, *) {
-                    Text(L("液态玻璃呈现柔和的折射与层次；通透玻璃更轻盈，经典毛玻璃更柔和。切换立即生效。", "Liquid Glass adds depth and refraction. Clear Glass is more transparent; Classic Frosted gives a softer blur. Changes apply immediately.")).font(.caption).foregroundStyle(.secondary)
+                    Text(L("统一应用于侧边栏与窗口搜索。液态玻璃呈现柔和层次，通透玻璃更轻盈，经典毛玻璃更柔和。", "Applies to the sidebar and window search. Liquid Glass adds depth, Clear Glass is more transparent, and Classic Frosted gives a softer blur.")).font(.caption).foregroundStyle(.secondary)
                 } else {
                     Text(L("液态玻璃需要 macOS 26 或更新版本，当前系统使用经典毛玻璃。", "Liquid Glass requires macOS 26 or later. This Mac uses Classic Frosted.")).font(.caption).foregroundStyle(.secondary)
                 }
