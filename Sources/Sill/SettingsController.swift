@@ -258,7 +258,7 @@ struct SettingsView: View {
                 Image(nsImage: NSApp.applicationIconImage)
                     .resizable().interpolation(.high).frame(width: 88, height: 88)
                 Text("Sill").font(.system(size: 30, weight: .semibold))
-                Text(L("版本 ", "Version ") + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"))
+                Text(L("版本 ", "Version ") + (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"))
                     .font(.callout).foregroundStyle(.secondary)
                 Text(L("窗口在侧，随手可达。", "Your windows, within reach."))
                     .font(.body).foregroundStyle(.secondary).padding(.top, 8)
